@@ -1,122 +1,141 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from "react";
+import api from "./api";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+interface Picture {
+  id: number;
+  filename: string;
+  url: string;
 }
 
-export default App
+function App() {
+  const [pics, setPics] = useState<Picture[]>([]);
+  const [activePic, setActivePic] = useState<Picture | null>(null);
+  const [activeTab, setActiveTab] = useState<"draw" | "map">("draw");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  const fetchPics = async () => {
+    const response = await api.get<Picture[]>("/pictures");
+    setPics(response.data);
+
+    if (!activePic && response.data.length > 0) {
+      setActivePic(response.data[0]);
+    }
+  };
+
+  useEffect(() => {
+    fetchPics();
+  }, []);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("image", file);
+
+    setUploading(true);
+    await api.post("/add-pic", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    setUploading(false);
+
+    fetchPics();
+  };
+
+  return (
+    <div className="flex h-screen">
+
+      {/* SIDEBAR */}
+      {sidebarOpen && (
+        <div className="w-64 bg-gray-900 text-white p-4 overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Pictures</h2>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="text-gray-300 hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Upload Button */}
+          <label className="block mb-4 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-center py-2 rounded">
+            {uploading ? "Uploading..." : "Add Image"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleUpload}
+            />
+          </label>
+
+          {/* Image List */}
+          {pics.map((pic) => (
+            <div
+              key={pic.id}
+              className={`cursor-pointer mb-3 p-2 rounded ${
+                activePic?.id === pic.id ? "bg-blue-600" : "bg-gray-700"
+              }`}
+              onClick={() => setActivePic(pic)}
+            >
+              <img src={pic.url} alt={pic.filename} className="w-full rounded" />
+              <p className="text-sm mt-1">{pic.filename}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* SIDEBAR OPEN BUTTON */}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="bg-gray-800 text-white px-3 py-2 m-2 rounded hover:bg-gray-700"
+        >
+          ☰ Pictures
+        </button>
+      )}
+
+      {/* MAIN AREA */}
+      <div className="flex-1 flex flex-col">
+
+        {/* TOP TABS */}
+        <div className="flex bg-gray-800 text-white">
+          <button
+            className={`px-6 py-3 ${
+              activeTab === "draw" ? "bg-blue-600" : "bg-gray-700"
+            }`}
+            onClick={() => setActiveTab("draw")}
+          >
+            Draw Lanes
+          </button>
+
+          <button
+            className={`px-6 py-3 ${
+              activeTab === "map" ? "bg-blue-600" : "bg-gray-700"
+            }`}
+            onClick={() => setActiveTab("map")}
+          >
+            Map
+          </button>
+        </div>
+
+        {/* MAIN CONTENT */}
+        <div className="flex-1 bg-black flex items-center justify-center">
+          {activePic ? (
+            <img
+              src={activePic.url}
+              alt="Selected Map"
+              className="max-w-full max-h-full object-contain"
+            />
+          ) : (
+            <p className="text-white">No image selected</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;

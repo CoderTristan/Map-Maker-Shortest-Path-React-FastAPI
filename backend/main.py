@@ -5,11 +5,22 @@ from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse
 from database import SessionLocal, engine
 from models import Picture, Base
+from fastapi.middleware.cors import CORSMiddleware
 
-# Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+origins = ["http://localhost:5173"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
+
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -29,12 +40,10 @@ async def add_pic(
     if not image.content_type.startswith("image/"):
         return JSONResponse({"error": "File must be an image"}, status_code=400)
 
-    # Save file to disk
     file_location = os.path.join(UPLOAD_DIR, image.filename)
     with open(file_location, "wb") as f:
         f.write(await image.read())
 
-    # Save metadata to Postgres
     pic = Picture(
         filename=image.filename,
         filepath=file_location,
@@ -54,3 +63,15 @@ async def add_pic(
 def get_image(filename: str):
     file_path = f"uploads/{filename}"
     return FileResponse(file_path)
+
+@app.get("/pictures")
+def list_pictures(db: Session = Depends(get_db)):
+    pics = db.query(Picture).all()
+    return [
+        {
+            "id": p.id,
+            "filename": p.filename,
+            "url": f"http://localhost:8000/images/{p.filename}"
+        }
+        for p in pics
+    ]
