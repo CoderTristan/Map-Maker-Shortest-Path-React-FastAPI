@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "./api";
 import "./App.css";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 interface Picture {
   id: number;
@@ -121,14 +122,53 @@ function App() {
           </button>
         </div>
 
-        {/* MAIN CONTENT */}
-        <div className="flex-1 bg-black flex items-center justify-center">
+        <div className="flex-1 bg-black flex items-center justify-center relative">
           {activePic ? (
-            <img
-              src={activePic.url}
-              alt="Selected Map"
-              className="max-w-full max-h-full object-contain"
-            />
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.5}
+              maxScale={8}
+              wheel={{ step: 0.1 }}
+              doubleClick={{ disabled: false }}
+              pinch={{ disabled: false }}
+              panning={{ velocityDisabled: false }}
+            >
+              {({ zoomIn, zoomOut, resetTransform }) => (
+                <>
+                  <div className="absolute top-4 right-4 flex flex-col gap-2 z-50">
+                    <button
+                      onClick={() => zoomIn()}
+                      className="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600"
+                    >
+                      +
+                    </button>
+
+                    <button
+                      onClick={() => zoomOut()}
+                      className="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600"
+                    >
+                      −
+                    </button>
+
+                    <button
+                      onClick={() => resetTransform()}
+                      className="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600"
+                    >
+                      Reset
+                    </button>
+                  </div>
+
+
+                  <TransformComponent>
+                    <img
+                      src={activePic.url}
+                      alt="Selected Map"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </TransformComponent>
+                </>
+              )}
+            </TransformWrapper>
           ) : (
             <p className="text-white">No image selected</p>
           )}
