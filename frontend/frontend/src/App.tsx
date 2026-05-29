@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import api from "./api";
-import "./App.css";
+import { usePaths } from "./usePaths";
+import MapCanvas from "./mapCanvas";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import "./App.css";
 
 interface Picture {
   id: number;
@@ -12,165 +14,141 @@ interface Picture {
 function App() {
   const [pics, setPics] = useState<Picture[]>([]);
   const [activePic, setActivePic] = useState<Picture | null>(null);
-  const [activeTab, setActiveTab] = useState<"draw" | "map">("draw");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [uploading, setUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"map" | "draw">("map");
+  const [canvasEnabled, setCanvasEnabled] = useState(false);
 
-  const fetchPics = async () => {
-    const response = await api.get<Picture[]>("/pictures");
-    setPics(response.data);
+  const {
+    paths,
+    loadPaths,
+    savePath,
+    startNewPath,
+    addNodeToPath,
+  } = usePaths();
 
-    if (!activePic && response.data.length > 0) {
-      setActivePic(response.data[0]);
-    }
-  };
-
+  // Load pictures on startup
   useEffect(() => {
-    fetchPics();
+    const load = async () => {
+      const res = await api.get("/pictures");
+      setPics(res.data);
+
+      if (res.data.length > 0) {
+        const first = res.data[0];
+        setActivePic(first);
+        loadPaths(first.id);
+      }
+    };
+
+    load();
   }, []);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+  // Auto-load paths when switching tabs
+  useEffect(() => {
+    if (activePic) loadPaths(activePic.id);
+  }, [activeTab]);
 
-    const file = e.target.files[0];
-    const formData = new FormData();
-    formData.append("image", file);
+  const handlePictureClick = async (pic: Picture) => {
+    setActivePic(pic);
+    await loadPaths(pic.id);
+  };
 
-    setUploading(true);
-    await api.post("/add-pic", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    setUploading(false);
-
-    fetchPics();
+  const handleCanvasClick = (x: number, y: number) => {
+    addNodeToPath(x, y);
   };
 
   return (
-    <div className="flex h-screen">
-
+    <div className="flex h-screen bg-gray-950 text-white">
       {/* SIDEBAR */}
-      {sidebarOpen && (
-        <div className="w-64 bg-gray-900 text-white p-4 overflow-y-auto">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Pictures</h2>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="text-gray-300 hover:text-white"
-            >
-              ✕
-            </button>
-          </div>
+      <div className="w-64 bg-gray-900 p-4 overflow-y-auto border-r border-gray-700">
+        <h2 className="text-xl font-bold mb-4">Pictures</h2>
 
-          {/* Upload Button */}
-          <label className="block mb-4 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-center py-2 rounded">
-            {uploading ? "Uploading..." : "Add Image"}
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleUpload}
+        {pics.map((pic) => (
+          <div
+            key={pic.id}
+            onClick={() => handlePictureClick(pic)}
+            className={`cursor-pointer mb-4 p-2 rounded transition ${
+              activePic?.id === pic.id
+                ? "bg-blue-600"
+                : "bg-gray-800 hover:bg-gray-700"
+            }`}
+          >
+            <img
+              src={pic.url}
+              alt={pic.filename}
+              className="w-full h-32 object-cover rounded"
             />
-          </label>
-
-          {/* Image List */}
-          {pics.map((pic) => (
-            <div
-              key={pic.id}
-              className={`cursor-pointer mb-3 p-2 rounded ${
-                activePic?.id === pic.id ? "bg-blue-600" : "bg-gray-700"
-              }`}
-              onClick={() => setActivePic(pic)}
-            >
-              <img src={pic.url} alt={pic.filename} className="w-full rounded" />
-              <p className="text-sm mt-1">{pic.filename}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* SIDEBAR OPEN BUTTON */}
-      {!sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="bg-gray-800 text-white px-3 py-2 m-2 rounded hover:bg-gray-700"
-        >
-          ☰ Pictures
-        </button>
-      )}
+            <p className="text-sm mt-2 text-center">{pic.filename}</p>
+          </div>
+        ))}
+      </div>
 
       {/* MAIN AREA */}
       <div className="flex-1 flex flex-col">
-
         {/* TOP TABS */}
-        <div className="flex bg-gray-800 text-white">
+        <div className="flex bg-gray-800 border-b border-gray-700">
           <button
-            className={`px-6 py-3 ${
-              activeTab === "draw" ? "bg-blue-600" : "bg-gray-700"
-            }`}
-            onClick={() => setActiveTab("draw")}
-          >
-            Draw Lanes
-          </button>
-
-          <button
-            className={`px-6 py-3 ${
-              activeTab === "map" ? "bg-blue-600" : "bg-gray-700"
-            }`}
             onClick={() => setActiveTab("map")}
+            className={`px-6 py-3 font-semibold transition ${
+              activeTab === "map"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-700 hover:bg-gray-600"
+            }`}
           >
             Map
           </button>
+
+          <button
+            onClick={() => setActiveTab("draw")}
+            className={`px-6 py-3 font-semibold transition ${
+              activeTab === "draw"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-700 hover:bg-gray-600"
+            }`}
+          >
+            Draw
+          </button>
+
+          <button
+            onClick={() => setCanvasEnabled((v) => !v)}
+            className="ml-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+          >
+            {canvasEnabled ? "Disable Canvas" : "Enable Canvas"}
+          </button>
+
+          <button
+            onClick={startNewPath}
+            className="ml-4 px-4 py-2 bg-green-700 hover:bg-green-600 rounded"
+          >
+            New Path
+          </button>
+
+          <button
+            onClick={() => activePic && savePath(activePic.id)}
+            className="ml-4 px-4 py-2 bg-purple-700 hover:bg-purple-600 rounded"
+          >
+            Save Path
+          </button>
         </div>
 
-        <div className="flex-1 bg-black flex items-center justify-center relative">
-          {activePic ? (
-            <TransformWrapper
-              initialScale={1}
-              minScale={0.5}
-              maxScale={8}
-              wheel={{ step: 0.1 }}
-              doubleClick={{ disabled: false }}
-              pinch={{ disabled: false }}
-              panning={{ velocityDisabled: false }}
-            >
-              {({ zoomIn, zoomOut, resetTransform }) => (
-                <>
-                  <div className="absolute top-4 right-4 flex flex-col gap-2 z-50">
-                    <button
-                      onClick={() => zoomIn()}
-                      className="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600"
-                    >
-                      +
-                    </button>
+        {/* MAP AREA */}
+        <div className="flex-1 bg-black relative">
+          {activePic && (
+            <TransformWrapper>
+              <TransformComponent>
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <img
+                    src={activePic.url}
+                    alt="Map"
+                    className="max-w-full max-h-full object-contain"
+                  />
 
-                    <button
-                      onClick={() => zoomOut()}
-                      className="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600"
-                    >
-                      −
-                    </button>
-
-                    <button
-                      onClick={() => resetTransform()}
-                      className="bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600"
-                    >
-                      Reset
-                    </button>
-                  </div>
-
-
-                  <TransformComponent>
-                    <img
-                      src={activePic.url}
-                      alt="Selected Map"
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  </TransformComponent>
-                </>
-              )}
+                  <MapCanvas
+                    paths={paths}
+                    canvasEnabled={canvasEnabled}
+                    onCanvasClick={handleCanvasClick}
+                  />
+                </div>
+              </TransformComponent>
             </TransformWrapper>
-          ) : (
-            <p className="text-white">No image selected</p>
           )}
         </div>
       </div>

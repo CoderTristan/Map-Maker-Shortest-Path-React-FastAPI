@@ -7,6 +7,9 @@ from database import SessionLocal, engine
 from models import Picture, Base
 from fastapi.middleware.cors import CORSMiddleware
 
+from schemas import PathCreate, NodeCreate
+from models import Path, Node
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -20,6 +23,7 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
+
 
 
 UPLOAD_DIR = "uploads"
@@ -75,3 +79,36 @@ def list_pictures(db: Session = Depends(get_db)):
         }
         for p in pics
     ]
+
+@app.post("/paths")
+def save_path(path: PathCreate, db: Session = Depends(get_db)):
+    new_path = Path(picture_id=path.picture_id)
+    db.add(new_path)
+    db.commit()
+    db.refresh(new_path)
+
+    for node in path.nodes:
+        db.add(Node(
+            picture_id=path.picture_id,
+            path_id=new_path.id,
+            x=node.x,
+            y=node.y
+        ))
+
+    db.commit()
+
+    return {"path_id": new_path.id}
+
+@app.get("/paths/{picture_id}")
+def get_paths(picture_id: int, db: Session = Depends(get_db)):
+    paths = db.query(Path).filter(Path.picture_id == picture_id).all()
+
+    result = []
+    for p in paths:
+        nodes = db.query(Node).filter(Node.path_id == p.id).all()
+        result.append({
+            "id": p.id,
+            "nodes": [{"id": n.id, "x": n.x, "y": n.y} for n in nodes]
+        })
+
+    return result
